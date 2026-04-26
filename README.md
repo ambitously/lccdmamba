@@ -2,6 +2,20 @@
 
  IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing
 
+## This Fork
+
+`main.py` now supports configurable single-GPU training:
+
+```bash
+python main.py --data-root /path/to/GVLM-CD256 --dataset-name GVLM-CD256 --batch-size 8 --epochs 100 --device 0
+```
+
+GVLM-CD256 is supported in its native layout: `A/`, `B/`, `label/`, and `list/train.txt`, `list/val.txt`, `list/test.txt`.
+
+See `AUTODL_SETUP.md` for RTX 5090 / AutoDL environment setup.
+
+This fork vendors the VMamba model/config files required by `lccdmamba/backbone.py`. The optional VMamba ImageNet-pretrained checkpoint can be supplied with the `VSSM_PRETRAINED` environment variable.
+
 
 The model weights can be found at: [GoogleCloud](https://drive.google.com/drive/folders/1fercsG25CGvukqRFluwELrcAyCQhA2c6?usp=sharing)
 

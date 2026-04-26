@@ -20,7 +20,10 @@ import pandas as pd
 import glob
 from torch.utils.data import DataLoader
 import datetime 
-from thop import profile
+try:
+    from thop import profile
+except ModuleNotFoundError:
+    profile = None
 from common.metrics import Metrics
 from common.csver import cls_count
 from common.logger import load_logger
@@ -53,7 +56,7 @@ def predict(model, dataset, weight_path=None, data_name="test", num_classes=2, d
     time_flag = datetime.datetime.strftime(datetime.datetime.now(), r"%Y_%m_%d_%H")
     model_name = model.__str__().split("(")[0]
 
-    img_dir = f"/mnt/data/Results/{data_name}/{model_name}_{time_flag}"
+    img_dir = os.path.join("results", data_name, f"{model_name}_{time_flag}")
     if not os.path.isdir(img_dir):
         os.makedirs(img_dir)
 
@@ -61,7 +64,7 @@ def predict(model, dataset, weight_path=None, data_name="test", num_classes=2, d
 
     logger = load_logger(f"{img_dir}/prediction.log")
     logger.info(f"test {model_name} on {data_name}")
-    model = model.cuda(device)
+    model = model.to(device)
     
     
     loader = DataLoader(dataset=dataset, batch_size=2, num_workers=0,
@@ -73,8 +76,8 @@ def predict(model, dataset, weight_path=None, data_name="test", num_classes=2, d
         for _, (img1, img2, label, name) in enumerate(loader):
 
             label = label
-            img1 = img1.cuda(device)
-            img2 = img2.cuda(device)
+            img1 = img1.to(device, non_blocking=True)
+            img2 = img2.to(device, non_blocking=True)
            
             pred = model(img1, img2)
            
@@ -129,10 +132,11 @@ def predict(model, dataset, weight_path=None, data_name="test", num_classes=2, d
     logger.info("[METRICS] Class F1: " + str(np.round(f1, 4)))
     # print(batch_cost, reader_cost)
 
-    _,c,w,h = img1.shape
-    x= torch.rand([1,c,w,h]).cuda(device)
-    flops, params = profile(model, [x,x])
-    logger.info(f"[PREDICT] model flops is {int(flops)}, params is {int(params)}")
+    if profile is not None:
+        _,c,w,h = img1.shape
+        x = torch.rand([1,c,w,h], device=device)
+        flops, params = profile(model, [x,x])
+        logger.info(f"[PREDICT] model flops is {int(flops)}, params is {int(params)}")
       
     
 
@@ -162,7 +166,7 @@ def test(model, dataset, args):
     
     time_flag = datetime.datetime.strftime(datetime.datetime.now(), r"%Y_%m_%d_%H")
 
-    img_dir = f"/mnt/data/Results/{args.data_name}/{args.model_name}_{time_flag}"
+    img_dir = os.path.join(args.results_dir, args.data_name, f"{args.model_name}_{time_flag}")
     if not os.path.isdir(img_dir):
         os.makedirs(img_dir)
 
@@ -177,8 +181,8 @@ def test(model, dataset, args):
         for _, (img1, img2, label, name) in enumerate(dataset):
     
             label = label
-            img1 = img1.cuda(args.device)
-            img2 = img2.cuda(args.device)
+            img1 = img1.to(args.device, non_blocking=True)
+            img2 = img2.to(args.device, non_blocking=True)
            
             pred = model(img1, img2)
             
@@ -233,11 +237,11 @@ def test(model, dataset, args):
     args.logger.info("[METRICS] Class F1: " + str(np.round(f1, 4)))
     # print(batch_cost, reader_cost)
 
-    _,c,w,h = img1.shape
-    x= torch.rand([1,c,w,h]).cuda(args.device)
-    flops, params = profile(model, [x,x])
-    
-    logger.info(f"[PREDICT] model flops is {int(flops)}, params is {int(params)}")
+    if profile is not None:
+        _,c,w,h = img1.shape
+        x = torch.rand([1,c,w,h], device=args.device)
+        flops, params = profile(model, [x,x])
+        logger.info(f"[PREDICT] model flops is {int(flops)}, params is {int(params)}")
 
     img_files = glob.glob(os.path.join(img_dir, '*.png'))
     data = []

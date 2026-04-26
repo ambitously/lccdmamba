@@ -2,40 +2,32 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-from einops import rearrange, repeat
 import argparse
-from timm.models.layers import DropPath, trunc_normal_
-from fvcore.nn import FlopCountAnalysis, flop_count_str, flop_count, parameter_count
-
-from torchvision.models.resnet import resnet34, ResNet34_Weights, resnet50
-from torchvision.models.vision_transformer import vit_b_16, VisionTransformer
-from torchvision.models.swin_transformer import swin_v2_b
-from torchvision import transforms
-
 from .vmamba.vmamba import VSSM, LayerNorm2d
 
 from .configs.config import get_config
 
-mamba_version_weights = {"vssm_base_224.yaml":"/home/jq/Code/weights/vssm_base_0229_ckpt_epoch_237.pth",
-                         "vssm_small_224.yaml":"/home/jq/Code/weights/vssm_small_0229_ckpt_epoch_222.pth",
-                         "vssm_tiny_224.yaml":"/home/jq/Code/weights/vssm_tiny_0230_ckpt_epoch_262.pth"}
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_CFG = os.path.join(_THIS_DIR, "configs", "vssm", "vmambav0_base_224.yaml")
+_DEFAULT_PRETRAINED = os.environ.get("VSSM_PRETRAINED", "")
 
-parser = argparse.ArgumentParser(description="VSSMamba")
-parser.add_argument('--cfg', type=str, default='/home/jq/Code/VMamba/lccdmamba/configs/vssm/vssm_base_224.yaml')
+parser = argparse.ArgumentParser(description="VSSMamba", add_help=False)
+parser.add_argument('--cfg', type=str, default=_DEFAULT_CFG)
 parser.add_argument(
         "--opts",
         help="Modify config options by adding 'KEY VALUE' pairs. ",
         default=None,
         nargs='+')
 
-mparas = parser.parse_args()
+mparas, _ = parser.parse_known_args()
 config = get_config(mparas)
 
 
 class Backbone_VSSM(VSSM):
     def __init__(self, 
                  out_indices=(0, 1, 2, 3), 
-                 pretrained=mamba_version_weights["vssm_base_224.yaml"],norm_layer='ln'):
+                 pretrained=_DEFAULT_PRETRAINED,
+                 norm_layer='ln'):
         # norm_layer='ln'
         # kwargs.update(norm_layer=norm_layer)
         super().__init__( patch_size=config.MODEL.VSSM.PATCH_SIZE, 
@@ -82,7 +74,7 @@ class Backbone_VSSM(VSSM):
             self.add_module(layer_name, layer)
 
         del self.classifier
-        self.load_pretrained(pretrained)
+        self.load_pretrained(pretrained or None)
 
     def load_pretrained(self, ckpt=None, key="model"):
         if ckpt is None:

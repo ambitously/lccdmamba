@@ -1,5 +1,4 @@
 import torch
-import torchvision.transforms as tfs
 import os
 import cv2
 from PIL import Image
@@ -26,13 +25,15 @@ class CDReader(data.Dataset):
         super(CDReader,self).__init__()
         self.en_edge = en_edge
 
-        self.data_list = self._get_list(os.path.join(path_root, mode))
+        self.data_list = self._get_list(path_root, mode)
         self.data_num = len(self.data_list)
 
-        self.label_info = pd.read_csv(os.path.join(path_root, 'label_info.csv'))
+        label_info_path = os.path.join(path_root, 'label_info.csv')
+        self.label_info = pd.read_csv(label_info_path) if os.path.exists(label_info_path) else None
         self.label_color = np.array([[1,0],[0,1]])
 
-        self.path_root = os.path.join(path_root, mode)
+        split_root = os.path.join(path_root, mode)
+        self.path_root = split_root if os.path.isdir(split_root) else path_root
 
         self.sst1_images = []
         self.sst1_edge = []
@@ -51,7 +52,7 @@ class CDReader(data.Dataset):
             for _file in self.data_list:
                 self.sst1_images.append(os.path.join(self.path_root, "A", _file))
                 self.sst2_images.append(os.path.join(self.path_root, "B", _file))
-                self.gt_images.append(os.path.join(self.path_root, "label", _file))
+                self.gt_images.append(self._label_path(_file))
 
     def __getitem__(self, index):
 
@@ -71,12 +72,15 @@ class CDReader(data.Dataset):
             B_img = np.concatenate((B_img, edge2[..., np.newaxis]), axis=-1)  # 将两个时段的数据concat在通道层
         # w, h, _ = A_img.shape
 
-        sst1 = tfs.ToTensor()(A_img)
-        sst2 = tfs.ToTensor()(B_img)
+        sst1 = self._to_tensor(A_img)
+        sst2 = self._to_tensor(B_img)
 
         gt = np.array(Image.open(lab_path))
-        if (len(gt.shape) == 3):
+        if len(gt.shape) == 3 and self.label_info is not None:
             gt = one_hot_it(gt, self.label_info)
+        elif len(gt.shape) == 3:
+            gt = np.array((np.any(gt != 0, axis=-1)), dtype=np.int8)
+            gt = self.label_color[gt]
         #gt = np.argmax(gt,axis=2)
         else:
             gt = np.array((gt != 0),dtype=np.int8)
@@ -88,15 +92,29 @@ class CDReader(data.Dataset):
     def __len__(self):
         return self.data_num
 
-    def _get_list(self, list_path):
-        
-        # data_list = None
-        
-        # with open(list_path, 'r') as f:
-        #     data_list = f.read().split('\n')[:-1]
-        # return data_list
-        data_list = os.listdir(os.path.join(list_path,'A'))
+    def _get_list(self, path_root, mode):
+        list_path = os.path.join(path_root, "list", f"{mode}.txt")
+        if os.path.isfile(list_path):
+            with open(list_path, "r", encoding="utf-8") as f:
+                return [line.strip() for line in f if line.strip()]
+
+        split_root = os.path.join(path_root, mode)
+        image_root = os.path.join(split_root if os.path.isdir(split_root) else path_root, "A")
+        data_list = os.listdir(image_root)
+        data_list.sort()
         return data_list
+
+    def _label_path(self, image_name):
+        label_dir = os.path.join(self.path_root, "label")
+        direct_path = os.path.join(label_dir, image_name)
+        if os.path.exists(direct_path):
+            return direct_path
+        stem, _ = os.path.splitext(image_name)
+        for ext in [".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"]:
+            candidate = os.path.join(label_dir, stem + ext)
+            if os.path.exists(candidate):
+                return candidate
+        return direct_path
 
     def handle_image(self,img):
         img=np.array(img)
@@ -178,6 +196,13 @@ class CDReader(data.Dataset):
         im /= std
         return im
 
+    @staticmethod
+    def _to_tensor(img):
+        if img.ndim == 2:
+            img = img[:, :, np.newaxis]
+        img = np.ascontiguousarray(img.transpose(2, 0, 1))
+        return torch.from_numpy(img).type(torch.float32)
+
 
 
 class TestReader(CDReader):
@@ -187,20 +212,8 @@ class TestReader(CDReader):
         self.data_name = os.path.split(path_root)[-1]
 
         self.file_name = []
-        if self.en_edge:
-            for _file in self.data_list:
-                self.sst1_images.append(os.path.join(f"{self.path_root}/A", _file))
-                self.sst2_images.append(os.path.join(f"{self.path_root}/B", _file))
-                self.sst1_edge.append(os.path.join(f"{self.path_root}/AEdge", _file))
-                self.sst2_edge.append(os.path.join(f"{self.path_root}/BEdge", _file))
-                self.gt_images.append(os.path.join(f"{self.path_root}/label", _file))
-                self.file_name.append(_file)
-        else:
-            for _file in self.data_list:
-                self.sst1_images.append(os.path.join(f"{self.path_root}/A", _file))
-                self.sst2_images.append(os.path.join(f"{self.path_root}/B", _file))
-                self.gt_images.append(os.path.join(f"{self.path_root}/label", _file))
-                self.file_name.append(_file)
+        for _file in self.data_list:
+            self.file_name.append(_file)
 
 
     def __getitem__(self, index):
@@ -221,12 +234,15 @@ class TestReader(CDReader):
             B_img = np.concatenate((B_img, edge2[..., np.newaxis]), axis=-1)  # 将两个时段的数据concat在通道层
         # w, h, _ = A_img.shape
 
-        sst1 = tfs.ToTensor()(A_img)
-        sst2 = tfs.ToTensor()(B_img)
+        sst1 = self._to_tensor(A_img)
+        sst2 = self._to_tensor(B_img)
 
         gt = np.array(Image.open(lab_path))
-        if (len(gt.shape) == 3):
+        if len(gt.shape) == 3 and self.label_info is not None:
             gt = one_hot_it(gt, self.label_info)
+        elif len(gt.shape) == 3:
+            gt = np.array((np.any(gt != 0, axis=-1)), dtype=np.int8)
+            gt = self.label_color[gt]
         #gt = np.argmax(gt,axis=2)
         else:
             gt = np.array((gt != 0),dtype=np.int8)

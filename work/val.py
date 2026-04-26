@@ -41,8 +41,8 @@ def evaluation(model,dataloader_eval,args):
         num_eval = 0
         for _,(image1, image2, label) in enumerate(dataloader_eval):
             num_eval +=1
-            image1 = image1.cuda(args.device)
-            image2 = image2.cuda(args.device)
+            image1 = image1.to(args.device, non_blocking=True)
+            image2 = image2.to(args.device, non_blocking=True)
             label = label
 
             pred = model(image1, image2)

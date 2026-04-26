@@ -1,0 +1,18 @@
+# Install PyTorch separately with a CUDA 12.8+ wheel on RTX 5090, then install this file.
+# Example:
+# pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+numpy>=1.24
+pandas>=2.0
+pillow>=10.0
+opencv-python-headless>=4.8
+timm>=0.9.16
+einops>=0.7
+fvcore>=0.1.5.post20221221
+thop>=0.1.1.post2209072238
+yacs>=0.1.8
+scipy>=1.10
+tqdm>=4.66
+ninja>=1.11
+packaging>=23.0
+termcolor>=2.3
+triton>=2.2; platform_system == "Linux"

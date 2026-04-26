@@ -1,109 +1,112 @@
-# 调用官方库及第三方库
+import argparse
+import os
+import random
+
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
-import numpy as np
-import datetime
-import platform
-import argparse
-import random
-import os
 
-# 基础功能
 from common.cdloader import CDReader, TestReader
-from work.train import train
-from work.predict import predict
-
-# from changedetection.configs.config import get_config
-# from changedetection.models.MambaBCD import STMambaBCD
-# from models.model import ChangeACFM, ChangeMM,ChangeResMM
-# from models.model2 import ChangeResSR, ChangeVitSR, ChangeSR, ChangeSR_noMCF
-from lccdmamba.model import LCCDMamba, LCCDMamba_noDTMS, LCCDMamba_RM, LCCDMamba_MISFPara, LCCDMamba_Lite, LCCDMamba_Lite2
-from rsmamba import RSMamba_CD
 from common.ready import Args
+from work.train import train
 
 
-# dataset_name = "GVLM_CD"
-# dataset_name = "LEVIR_CD"
-# dataset_name = "CLCD"
-# dataset_name = "WHU_BCD"
-
-# dataset_name = "MacaoCD"
-# dataset_name = "SYSU_CD"
-dataset_name = "S2Looking"
-
-dataset_path = '/mnt/data/Datasets/{}'.format(dataset_name)
-
-num_classes = 2
-batch_size = 2
-num_epochs = 100 
-
-parser = argparse.ArgumentParser(description="Training on SYSU/LEVIR-CD+/WHU-CD dataset")
-parser.add_argument('--cfg', type=str, default='/home/jq/Code/VMamba/changedetection/configs/vssm1/vssm_base_224.yaml')
-parser.add_argument(
-        "--opts",
-        help="Modify config options by adding 'KEY VALUE' pairs. ",
-        default=None,
-        nargs='+')
-
-mparas = parser.parse_args()
-
-    # with open(args.test_data_list_path, "r") as f:
-    #     # data_name_list = f.read()
-    #     test_data_name_list = [data_name.strip() for data_name in f]
-    # args.test_data_name_list = test_data_name_list
-
-# config = get_config(mparas)
-
-model = RSMamba_CD()
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train LCCDMamba on a change detection dataset")
+    parser.add_argument("--data-root", type=str, required=True,
+                        help="Dataset root. GVLM-CD256 should contain A, B, label and list folders.")
+    parser.add_argument("--dataset-name", type=str, default="GVLM-CD256")
+    parser.add_argument("--output-dir", type=str, default="output")
+    parser.add_argument("--results-dir", type=str, default="results")
+    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--lr", type=float, default=1.4e-4)
+    parser.add_argument("--weight-decay", type=float, default=5e-4)
+    parser.add_argument("--num-workers", type=int, default=8)
+    parser.add_argument("--device", type=str, default="0",
+                        help="Single GPU id before CUDA_VISIBLE_DEVICES remapping. Use 0 on AutoDL.")
+    parser.add_argument("--seed", type=int, default=32765)
+    parser.add_argument("--model", type=str, default="lccdmamba", choices=["lccdmamba"])
+    parser.add_argument("--pred-idx", type=int, default=0)
+    parser.add_argument("--no-test", action="store_true", help="Skip final test after training.")
+    return parser.parse_args()
 
 
-model_name = model.__str__().split("(")[0]
-args = Args('output/{}'.format(dataset_name.lower()), model_name)
-args.data_name = dataset_name
-args.num_classes = num_classes
-args.batch_size = batch_size
-args.iters = num_epochs
-args.pred_idx = 0
-args.device = 1
-
-def seed_torch(seed=2022):
+def seed_torch(seed):
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def build_model(name):
+    if name == "lccdmamba":
+        try:
+            from lccdmamba.model import LCCDMamba
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "LCCDMamba needs the VMamba source files that are missing from this fork. "
+                "Please copy lccdmamba/vmamba/vmamba.py and lccdmamba/configs/config.py "
+                "plus the VSSM yaml configs from the original LCCDMamba/VMamba release."
+            ) from exc
+        return LCCDMamba()
+    raise ValueError(f"Unsupported model: {name}")
 
 
 if __name__ == "__main__":
-    # 代码运行预处理
-    seed_torch(32765)
+    cli = parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = cli.device
+    seed_torch(cli.seed)
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. This training script is intended for a single NVIDIA GPU.")
+    device = torch.device("cuda:0")
     torch.cuda.empty_cache()
-    torch.cuda.init()
-    os.environ['CUDA_VISIBLE_DEVICES'] = "{}".format(args.device)
-    device = torch.device(args.device)
-    
-    eval_data = CDReader(path_root = dataset_path, mode="val", en_edge=False)
-    train_data = CDReader(path_root = dataset_path, mode="train", en_edge=False)
-    
-    # dataloader_pred = DataLoader(pred_data, batch_size, num_workers=1)
-    dataloader_eval = DataLoader(dataset=eval_data, batch_size=args.batch_size, num_workers=16,
-                                 shuffle=False, drop_last=True)
-    dataloader_train = DataLoader(dataset=train_data, batch_size=args.batch_size, num_workers=16,
-                                  shuffle=True, drop_last=True)
-    
-    test_data = TestReader(path_root = dataset_path, mode="test", en_edge=False)
-    dataloader_test = DataLoader(dataset=test_data, batch_size=args.batch_size, num_workers=0,
-                                  shuffle=True, drop_last=True)
-    
-    # try:
-    #     model.load_state_dict(torch.load(save_model_dir))
-    #     print("load success")
-    # except:
-    #     args.num_epochs = 300
-    #     args.params["lr"] = 0.0005
-    model = model.to(device, dtype=torch.float)
-    # model.load_state_dict(torch.load("/home/jq/Code/torch/output/levir_d/SiamUnet_diff_2023_10_26_16/SiamUnet_diff_best.pth"))
+
+    model = build_model(cli.model)
+    model_name = model.__class__.__name__
+
+    args = Args(os.path.join(cli.output_dir, cli.dataset_name.lower()), model_name)
+    args.data_name = cli.dataset_name
+    args.num_classes = 2
+    args.batch_size = cli.batch_size
+    args.iters = cli.epochs
+    args.pred_idx = cli.pred_idx
+    args.device = device
+    args.lr = cli.lr
+    args.weight_decay = cli.weight_decay
+    args.results_dir = cli.results_dir
+    args.skip_test = cli.no_test
+
+    train_data = CDReader(path_root=cli.data_root, mode="train", en_edge=False)
+    eval_data = CDReader(path_root=cli.data_root, mode="val", en_edge=False)
+    test_data = TestReader(path_root=cli.data_root, mode="test", en_edge=False)
+
+    dataloader_train = DataLoader(
+        dataset=train_data,
+        batch_size=args.batch_size,
+        num_workers=cli.num_workers,
+        shuffle=True,
+        pin_memory=True,
+        drop_last=True,
+    )
+    dataloader_eval = DataLoader(
+        dataset=eval_data,
+        batch_size=args.batch_size,
+        num_workers=cli.num_workers,
+        shuffle=False,
+        pin_memory=True,
+        drop_last=False,
+    )
+    dataloader_test = DataLoader(
+        dataset=test_data,
+        batch_size=args.batch_size,
+        num_workers=cli.num_workers,
+        shuffle=False,
+        pin_memory=True,
+        drop_last=False,
+    )
+
+    model = model.to(device=device, dtype=torch.float)
     train(model, dataloader_train, dataloader_eval, dataloader_test, args)
-    # weight_path = r"/home/jq/Code/VMamba/output/whu_bcd/ChangeSR_2024_06_25_16/ChangeSR_best.pth"
-    # predict(model,test_data,weight_path, dataset_name)
-    

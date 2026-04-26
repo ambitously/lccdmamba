@@ -12,7 +12,10 @@ from work.utils import get_params
 from work.val import evaluation
 from work.predict import test
 from work.utils import get_scheduler
-import changedetection.utils_func.lovasz_loss as L
+try:
+    import changedetection.utils_func.lovasz_loss as L
+except ModuleNotFoundError:
+    L = None
 
 
 def loss(logits,labels):
@@ -28,10 +31,10 @@ def loss(logits,labels):
     #logits = F.softmax(logits,dim=1)
     ce_loss_1 = torch.nn.CrossEntropyLoss()(logits,labels)
     # return ce_loss_1
+    if L is None:
+        return ce_loss_1
     lovasz_loss = L.lovasz_softmax(F.softmax(logits, dim=1), labels, ignore=255)
-    main_loss = ce_loss_1 + 0.75 * lovasz_loss
-    return main_loss
-    return torch.nn.CrossEntropyLoss()(logits,labels)
+    return ce_loss_1 + 0.75 * lovasz_loss
 
 
 def dice_loss(logits,targets,smooth=1e-5):
@@ -63,7 +66,7 @@ def train(model, dataloader_train, dataloader_eval, dataloader_test, args):
     #         {'params': get_params(model, key='10x'), 'lr': 5e-3}
     #     ],
     #     momentum = 0.9 , weight_decay = 1e-4)
-    optimizer = optim.AdamW(model.parameters(),lr= 1.4e-4, weight_decay=5e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     # torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0, T_mult = 1, eta_min = 0, last_epoch = -1, verbose = False)
     
     max_itr = args.iters * len(dataloader_train)
@@ -83,9 +86,9 @@ def train(model, dataloader_train, dataloader_eval, dataloader_test, args):
 
             #optimizer = adjust_lr(optimizer, epoch*iter, max_itr)
             
-            image1 = image1.cuda(args.device)
-            image2 = image2.cuda(args.device)
-            label = label.cuda(args.device).long()
+            image1 = image1.to(args.device, non_blocking=True)
+            image2 = image2.to(args.device, non_blocking=True)
+            label = label.to(args.device, non_blocking=True).long()
             
             pred = model(image1, image2)
            
@@ -134,7 +137,8 @@ def train(model, dataloader_train, dataloader_eval, dataloader_test, args):
         # test_model(model, dataloader_eval, evaluator)
         # images_prediction(model, dataloader_pred, save_dir=save_folder, label_info=label_info)
     
-    test(model, dataloader_test, args)
+    if not getattr(args, "skip_test", False):
+        test(model, dataloader_test, args)
     # last_path = os.path.join(args.save_dir, "iter_{}.pth".format(args.iters))
     # test_last(model, dataloader_test, args, last_path)
     
