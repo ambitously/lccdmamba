@@ -121,6 +121,23 @@ def selective_scan_fn(
     oflex=True,
     backend=None,
 ):
+    if backend == "oflex" and not WITH_SELECTIVESCAN_OFLEX:
+        backend = None
+    elif backend == "core" and not WITH_SELECTIVESCAN_CORE:
+        backend = None
+    elif backend == "mamba" and not WITH_SELECTIVESCAN_MAMBA:
+        backend = None
+
+    if backend is None:
+        if WITH_SELECTIVESCAN_OFLEX:
+            backend = "oflex"
+        elif WITH_SELECTIVESCAN_CORE:
+            backend = "core"
+        elif WITH_SELECTIVESCAN_MAMBA:
+            backend = "mamba"
+        else:
+            backend = "torch"
+
     WITH_CUDA = (WITH_SELECTIVESCAN_OFLEX or WITH_SELECTIVESCAN_CORE or WITH_SELECTIVESCAN_MAMBA)
     fn = selective_scan_torch if backend == "torch" or (not WITH_CUDA) else SelectiveScanCuda.apply
     return fn(u, delta, A, B, C, D, delta_bias, delta_softplus, oflex, backend)

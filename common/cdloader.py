@@ -21,11 +21,11 @@ def one_hot_it(label, label_info):
 
 
 class CDReader(data.Dataset):
-    def __init__(self,path_root="./dataset/",mode="train", en_edge=False):
+    def __init__(self,path_root="./dataset/",mode="train", en_edge=False, list_file=None):
         super(CDReader,self).__init__()
         self.en_edge = en_edge
 
-        self.data_list = self._get_list(path_root, mode)
+        self.data_list = self._get_list(path_root, mode, list_file)
         self.data_num = len(self.data_list)
 
         label_info_path = os.path.join(path_root, 'label_info.csv')
@@ -92,8 +92,9 @@ class CDReader(data.Dataset):
     def __len__(self):
         return self.data_num
 
-    def _get_list(self, path_root, mode):
-        list_path = os.path.join(path_root, "list", f"{mode}.txt")
+    def _get_list(self, path_root, mode, list_file=None):
+        list_name = list_file if list_file is not None else f"{mode}.txt"
+        list_path = os.path.join(path_root, "list", list_name)
         if os.path.isfile(list_path):
             with open(list_path, "r", encoding="utf-8") as f:
                 return [line.strip() for line in f if line.strip()]
@@ -206,8 +207,8 @@ class CDReader(data.Dataset):
 
 
 class TestReader(CDReader):
-    def __init__(self, path_root, mode, en_edge=False):
-        super(TestReader, self).__init__(path_root, mode, en_edge)
+    def __init__(self, path_root, mode, en_edge=False, list_file=None):
+        super(TestReader, self).__init__(path_root, mode, en_edge, list_file)
 
         self.data_name = os.path.split(path_root)[-1]
 

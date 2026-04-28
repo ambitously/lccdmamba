@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,7 +28,8 @@ class Backbone_VSSM(VSSM):
     def __init__(self, 
                  out_indices=(0, 1, 2, 3), 
                  pretrained=_DEFAULT_PRETRAINED,
-                 norm_layer='ln'):
+                 norm_layer=None):
+        norm_layer = norm_layer or config.MODEL.VSSM.NORM_LAYER
         # norm_layer='ln'
         # kwargs.update(norm_layer=norm_layer)
         super().__init__( patch_size=config.MODEL.VSSM.PATCH_SIZE, 

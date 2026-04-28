@@ -19,6 +19,9 @@ def parse_args():
     parser.add_argument("--output-dir", type=str, default="output")
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--train-batch-size", type=int, default=None)
+    parser.add_argument("--val-batch-size", type=int, default=None)
+    parser.add_argument("--test-batch-size", type=int, default=None)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--lr", type=float, default=1.4e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
@@ -28,6 +31,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=32765)
     parser.add_argument("--model", type=str, default="lccdmamba", choices=["lccdmamba"])
     parser.add_argument("--pred-idx", type=int, default=0)
+    parser.add_argument("--train-list", type=str, default="train.txt")
+    parser.add_argument("--val-list", type=str, default="val.txt")
+    parser.add_argument("--test-list", type=str, default="test.txt")
     parser.add_argument("--no-test", action="store_true", help="Skip final test after training.")
     return parser.parse_args()
 
@@ -68,9 +74,16 @@ if __name__ == "__main__":
     model_name = model.__class__.__name__
 
     args = Args(os.path.join(cli.output_dir, cli.dataset_name.lower()), model_name)
+    train_batch_size = cli.train_batch_size if cli.train_batch_size is not None else cli.batch_size
+    val_batch_size = cli.val_batch_size if cli.val_batch_size is not None else cli.batch_size
+    test_batch_size = cli.test_batch_size if cli.test_batch_size is not None else cli.batch_size
+
     args.data_name = cli.dataset_name
     args.num_classes = 2
-    args.batch_size = cli.batch_size
+    args.batch_size = train_batch_size
+    args.train_batch_size = train_batch_size
+    args.val_batch_size = val_batch_size
+    args.test_batch_size = test_batch_size
     args.iters = cli.epochs
     args.pred_idx = cli.pred_idx
     args.device = device
@@ -79,13 +92,13 @@ if __name__ == "__main__":
     args.results_dir = cli.results_dir
     args.skip_test = cli.no_test
 
-    train_data = CDReader(path_root=cli.data_root, mode="train", en_edge=False)
-    eval_data = CDReader(path_root=cli.data_root, mode="val", en_edge=False)
-    test_data = TestReader(path_root=cli.data_root, mode="test", en_edge=False)
+    train_data = CDReader(path_root=cli.data_root, mode="train", en_edge=False, list_file=cli.train_list)
+    eval_data = CDReader(path_root=cli.data_root, mode="val", en_edge=False, list_file=cli.val_list)
+    test_data = TestReader(path_root=cli.data_root, mode="test", en_edge=False, list_file=cli.test_list)
 
     dataloader_train = DataLoader(
         dataset=train_data,
-        batch_size=args.batch_size,
+        batch_size=args.train_batch_size,
         num_workers=cli.num_workers,
         shuffle=True,
         pin_memory=True,
@@ -93,7 +106,7 @@ if __name__ == "__main__":
     )
     dataloader_eval = DataLoader(
         dataset=eval_data,
-        batch_size=args.batch_size,
+        batch_size=args.val_batch_size,
         num_workers=cli.num_workers,
         shuffle=False,
         pin_memory=True,
@@ -101,7 +114,7 @@ if __name__ == "__main__":
     )
     dataloader_test = DataLoader(
         dataset=test_data,
-        batch_size=args.batch_size,
+        batch_size=args.test_batch_size,
         num_workers=cli.num_workers,
         shuffle=False,
         pin_memory=True,

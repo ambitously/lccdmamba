@@ -15,13 +15,13 @@ class DTMS(nn.Module):
         self.ssm1 = ssm(hidden_dim=dim1, drop_path=0.1, norm_layer=nn.LayerNorm, channel_first=False,
                 ssm_d_state=1, ssm_ratio=2.0, ssm_dt_rank='auto', ssm_act_layer=nn.SiLU,
                 ssm_conv=3, ssm_conv_bias=False, ssm_drop_rate=0.0, ssm_init='v0',
-                forward_type='v3noz', mlp_ratio=4.0, mlp_act_layer=nn.GELU, mlp_drop_rate=0.0,
+                forward_type='v3_noz', mlp_ratio=4.0, mlp_act_layer=nn.GELU, mlp_drop_rate=0.0,
                 gmlp=False, use_checkpoint=use_checkpoint)
         
         self.ssm2 = ssm(hidden_dim=in_ch2, drop_path=0.1, norm_layer=nn.LayerNorm, channel_first=False,
                 ssm_d_state=1, ssm_ratio=2.0, ssm_dt_rank='auto', ssm_act_layer=nn.SiLU,
                 ssm_conv=3, ssm_conv_bias=False, ssm_drop_rate=0.0, ssm_init='v0',
-                forward_type='v3noz', mlp_ratio=4.0, mlp_act_layer=nn.GELU, mlp_drop_rate=0.0,
+                forward_type='v3_noz', mlp_ratio=4.0, mlp_act_layer=nn.GELU, mlp_drop_rate=0.0,
                 gmlp=False, use_checkpoint=use_checkpoint)
         
 

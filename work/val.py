@@ -66,7 +66,7 @@ def evaluation(model,dataloader_eval,args):
     kappa = metrics["kappa"]
 
     if args.logger != None:
-        args.logger.info("[EVAL] evalution {} images, time: {}".format(num_eval * args.batch_size, datetime.now() - p_start))
+        args.logger.info("[EVAL] evalution {} batches, time: {}".format(num_eval, datetime.now() - p_start))
         args.logger.info("[METRICS] PA:{:.4},mIoU:{:.4},kappa:{:.4},Macro_f1:{:.4}".format(pa,miou,kappa,mf1))
         
     d = pd.DataFrame([metrics])
